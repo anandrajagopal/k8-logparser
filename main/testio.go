@@ -11,16 +11,11 @@ import (
 	"time"
 )
 
-func write(wg *sync.WaitGroup) {
-	go func() {
-		defer wg.Done()
-		//Write()
-	}()
-}
-
 //Tail structure
 type Tail struct {
-	lk sync.Mutex
+	lk      sync.Mutex
+	fn      string
+	pattern string
 }
 
 func read(wg *sync.WaitGroup, ch chan string) {
@@ -29,7 +24,6 @@ func read(wg *sync.WaitGroup, ch chan string) {
 		//defer close(ch)
 		fmt.Println("reading file")
 		file, err := os.Open("/go/test.log")
-		fmt.Println("file opened for reading")
 		if err != nil {
 		L:
 			for {
@@ -44,20 +38,18 @@ func read(wg *sync.WaitGroup, ch chan string) {
 				}
 			}
 		}
-		tail := &Tail{}
+		fmt.Println("file opened for reading")
+
+		//tail := &Tail{}
 
 		reader := bufio.NewReader(file)
-		//timeout := time.After(5 * time.Second)
 		count := 1
 		for {
 			select {
-			//case <-timeout:
-			//fmt.Println("done reading")
-			//return
 			default:
-				tail.lk.Lock()
+				//tail.lk.Lock()
 				text, err := reader.ReadString('\n')
-				tail.lk.Unlock()
+				//tail.lk.Unlock()
 				if err == io.EOF {
 					//fmt.Println("EOF reached")
 					//break
@@ -79,7 +71,6 @@ func process(wg *sync.WaitGroup, logCh <-chan string) {
 	pattern := `\d{4}-\d{2}-\d{2}\s\d{2}`
 	go func() {
 		defer wg.Done()
-		//timeout := time.After(5 * time.Second)
 		for {
 			select {
 			case line := <-logCh:
@@ -92,10 +83,6 @@ func process(wg *sync.WaitGroup, logCh <-chan string) {
 					buffer.Reset()
 				}
 				buffer.WriteString(line)
-				//fmt.Println("[", line, "]")
-				/*case <-timeout:
-				print(&buffer)
-				return*/
 			}
 		}
 	}()
@@ -109,8 +96,7 @@ func print(r io.Reader) {
 func main() {
 	var wg sync.WaitGroup
 	logCh := make(chan string)
-	wg.Add(3)
-	write(&wg)
+	wg.Add(2)
 	read(&wg, logCh)
 	process(&wg, logCh)
 	wg.Wait()
