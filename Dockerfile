@@ -5,7 +5,7 @@ WORKDIR /go
 #COPY ./test.log .
 COPY ./bin/main .
 
-RUN mkfifo test.log && chmod 777 * 
+#RUN mkfifo test.log && chmod 777 * 
 
 USER daemon
 
