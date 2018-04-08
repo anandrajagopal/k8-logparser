@@ -23,15 +23,15 @@ func read(wg *sync.WaitGroup, ch chan string) {
 		defer wg.Done()
 		//defer close(ch)
 		fmt.Println("reading file")
-		file, err := os.Open("/go/test.log")
+		file, err := os.Open("/etc/log/output.log")
 		if err != nil {
 		L:
 			for {
 				select {
 				//wait until the file is available
 				case <-time.After(5 * time.Second):
-					fmt.Println("looking for file", "/go/test.log")
-					file, err = os.Open("/go/test.log")
+					fmt.Println("looking for file", "/go/output.log")
+					file, err = os.Open("/etc/log/output.log")
 					if err == nil {
 						break L
 					}
