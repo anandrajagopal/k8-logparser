@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"regexp"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -18,20 +19,20 @@ type Tail struct {
 	pattern string
 }
 
-func read(wg *sync.WaitGroup, ch chan string) {
+func read(applog *Tail, wg *sync.WaitGroup, ch chan string) {
 	go func() {
 		defer wg.Done()
 		//defer close(ch)
-		fmt.Println("reading file")
-		file, err := os.Open("/etc/log/output.log")
+		fmt.Println("reading file", applog.fn)
+		file, err := os.Open(applog.fn)
 		if err != nil {
 		L:
 			for {
 				select {
 				//wait until the file is available
 				case <-time.After(5 * time.Second):
-					fmt.Println("looking for file", "/go/output.log")
-					file, err = os.Open("/etc/log/output.log")
+					fmt.Println("looking for file", applog.fn)
+					file, err = os.Open(applog.fn)
 					if err == nil {
 						break L
 					}
@@ -57,7 +58,7 @@ func read(wg *sync.WaitGroup, ch chan string) {
 				if err != nil {
 					//panic("unable to read file")
 				} else {
-					ch <- string(count) + text
+					ch <- strconv.Itoa(count) + text
 					count++
 				}
 			}
@@ -66,9 +67,9 @@ func read(wg *sync.WaitGroup, ch chan string) {
 	}()
 }
 
-func process(wg *sync.WaitGroup, logCh <-chan string) {
+func process(applog *Tail, wg *sync.WaitGroup, logCh <-chan string) {
 	var buffer bytes.Buffer
-	pattern := `\d{4}-\d{2}-\d{2}\s\d{2}`
+	pattern := applog.pattern
 	go func() {
 		defer wg.Done()
 		for {
@@ -94,10 +95,14 @@ func print(r io.Reader) {
 }
 
 func main() {
+	applog := &Tail{
+		fn:      `/etc/log/output.log`,
+		pattern: `\d{4}-\d{2}-\d{2}\s\d{2}`,
+	}
 	var wg sync.WaitGroup
 	logCh := make(chan string)
 	wg.Add(2)
-	read(&wg, logCh)
-	process(&wg, logCh)
+	read(applog, &wg, logCh)
+	process(applog, &wg, logCh)
 	wg.Wait()
 }
