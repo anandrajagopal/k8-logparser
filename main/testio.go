@@ -44,7 +44,6 @@ func read(applog *Tail, wg *sync.WaitGroup, ch chan string) {
 		//tail := &Tail{}
 
 		reader := bufio.NewReader(file)
-		count := 1
 		for {
 			select {
 			default:
@@ -58,8 +57,7 @@ func read(applog *Tail, wg *sync.WaitGroup, ch chan string) {
 				if err != nil {
 					//panic("unable to read file")
 				} else {
-					ch <- strconv.Itoa(count) + text
-					count++
+					ch <- text
 				}
 			}
 
@@ -72,6 +70,7 @@ func process(applog *Tail, wg *sync.WaitGroup, logCh <-chan string) {
 	pattern := applog.pattern
 	go func() {
 		defer wg.Done()
+		count := 1
 		for {
 			select {
 			case line := <-logCh:
@@ -82,8 +81,10 @@ func process(applog *Tail, wg *sync.WaitGroup, logCh <-chan string) {
 				if matched {
 					print(&buffer)
 					buffer.Reset()
+					count = 1
 				}
-				buffer.WriteString(line)
+				buffer.WriteString(strconv.Itoa(count) + "--> " + line)
+				count++
 			}
 		}
 	}()
