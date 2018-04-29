@@ -14,12 +14,13 @@ import (
 
 //Tail structure
 type Tail struct {
-	lk      sync.Mutex
 	fn      string
 	pattern string
 }
 
-func read(applog *Tail, wg *sync.WaitGroup, ch chan string) {
+func read(applog *Tail, wg *sync.WaitGroup, printChan chan string) {
+	processChan := make(chan string)
+	process(applog, wg, processChan, printChan)
 	go func() {
 		defer wg.Done()
 		//defer close(ch)
@@ -57,7 +58,7 @@ func read(applog *Tail, wg *sync.WaitGroup, ch chan string) {
 				if err != nil {
 					//panic("unable to read file")
 				} else {
-					ch <- text
+					processChan <- text
 				}
 			}
 
@@ -65,26 +66,41 @@ func read(applog *Tail, wg *sync.WaitGroup, ch chan string) {
 	}()
 }
 
-func process(applog *Tail, wg *sync.WaitGroup, logCh <-chan string) {
+func process(applog *Tail, wg *sync.WaitGroup, processChan <-chan string, printChan chan string) {
 	var buffer bytes.Buffer
 	pattern := applog.pattern
+	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		count := 1
 		for {
 			select {
-			case line := <-logCh:
+			case line := <-processChan:
 				matched, err := regexp.MatchString(pattern, line)
 				if err != nil {
 					panic(err)
 				}
 				if matched {
-					print(&buffer)
+					//print(&buffer)
+					//buffer.Reset()
+					printChan <- buffer.String()
 					buffer.Reset()
 					count = 1
 				}
 				buffer.WriteString(strconv.Itoa(count) + "--> " + line)
 				count++
+			}
+		}
+	}()
+}
+
+func printFromChan(wg *sync.WaitGroup, printChan chan string) {
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case line := <-printChan:
+				fmt.Print("{{", line, "}}")
 			}
 		}
 	}()
@@ -96,14 +112,22 @@ func print(r io.Reader) {
 }
 
 func main() {
-	applog := &Tail{
-		fn:      `/etc/log/output.log`,
-		pattern: `\d{4}-\d{2}-\d{2}\s\d{2}`,
+	logs := []*Tail{
+		&Tail{
+			fn:      `/etc/log/output.log`,
+			pattern: `\d{4}-\d{2}-\d{2}\s\d{2}`,
+		},
+		&Tail{
+			fn:      `/etc/gc/gclog`,
+			pattern: `\d{4}-\d{2}-\d{2}\s\d{2}`,
+		},
 	}
 	var wg sync.WaitGroup
 	logCh := make(chan string)
 	wg.Add(2)
-	read(applog, &wg, logCh)
-	process(applog, &wg, logCh)
+	for _, log := range logs {
+		read(log, &wg, logCh)
+	}
+	printFromChan(&wg, logCh)
 	wg.Wait()
 }
