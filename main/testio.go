@@ -5,17 +5,20 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"regexp"
 	"strconv"
 	"sync"
 	"time"
+
+	yaml "gopkg.in/yaml.v2"
 )
 
 //Tail structure
 type Tail struct {
-	fn      string
-	pattern string
+	Fn      string `yaml:"fileName"`
+	Pattern string `yaml:"newLinePattern"`
 }
 
 func read(applog *Tail, wg *sync.WaitGroup, printChan chan string) {
@@ -24,16 +27,16 @@ func read(applog *Tail, wg *sync.WaitGroup, printChan chan string) {
 	go func() {
 		defer wg.Done()
 		//defer close(ch)
-		fmt.Println("reading file", applog.fn)
-		file, err := os.Open(applog.fn)
+		fmt.Println("reading file", applog.Fn)
+		file, err := os.Open(applog.Fn)
 		if err != nil {
 		L:
 			for {
 				select {
 				//wait until the file is available
 				case <-time.After(5 * time.Second):
-					fmt.Println("looking for file", applog.fn)
-					file, err = os.Open(applog.fn)
+					fmt.Println("looking for file", applog.Fn)
+					file, err = os.Open(applog.Fn)
 					if err == nil {
 						break L
 					}
@@ -68,7 +71,7 @@ func read(applog *Tail, wg *sync.WaitGroup, printChan chan string) {
 
 func process(applog *Tail, wg *sync.WaitGroup, processChan <-chan string, printChan chan string) {
 	var buffer bytes.Buffer
-	pattern := applog.pattern
+	pattern := applog.Pattern
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -112,15 +115,14 @@ func print(r io.Reader) {
 }
 
 func main() {
-	logs := []*Tail{
-		&Tail{
-			fn:      `/etc/log/output.log`,
-			pattern: `\d{4}-\d{2}-\d{2}\s\d{2}`,
-		},
-		&Tail{
-			fn:      `/etc/gc/gclog`,
-			pattern: `\d{4}-\d{2}-\d{2}\s\d{2}`,
-		},
+	bytes, err := ioutil.ReadFile("/etc/config/config")
+	if err != nil {
+		panic("Cannot read file")
+	}
+	logs := []*Tail{}
+	err = yaml.Unmarshal(bytes, &logs)
+	if err != nil {
+		panic(err)
 	}
 	var wg sync.WaitGroup
 	logCh := make(chan string)
