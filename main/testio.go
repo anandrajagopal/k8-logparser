@@ -26,7 +26,6 @@ func read(applog *Tail, wg *sync.WaitGroup, printChan chan string) {
 	process(applog, wg, processChan, printChan)
 	go func() {
 		defer wg.Done()
-		//defer close(ch)
 		fmt.Println("reading file", applog.Fn)
 		file, err := os.Open(applog.Fn)
 		if err != nil {
