@@ -1,0 +1,80 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: logfile-config
+data: # Add configuration for each named pipe. Named pipes are an easy way to communicate between containers
+  config: | 
+    - fileName: /etc/log/output.log
+      newLinePattern: \d{4}-\d{2}-\d{2}\s\d{2}
+    - fileName: /etc/gc/gclog
+      newLinePattern: \n
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: 
+  name: hello-world-spring
+spec:
+  replicas: 1
+  selector:
+    matchLabels: 
+      version: v2
+  template:
+    metadata:
+      labels:
+        version: v2
+        app: hello
+    spec:
+      initContainers: # using init container to create the named pipe using mkfifo command. 
+      - name: install
+        image: busybox
+        command: ["/bin/sh", "-c"]
+        args: ["mkfifo -m 777 /work-dir/output.log; mkfifo -m 777 /gc/gclog"] # creates 2 pipes
+        volumeMounts: # mount the volumes in a specific path so mkfifo can create the named pipes there.
+        - name: pipe
+          mountPath: "/work-dir"
+        - name: gc
+          mountPath: "/gc"
+      containers:
+        - name: logreader-sidecar
+          image: docker.io/r74anand/logreader
+          volumeMounts: # mount the volumes in whatever mount path. The init container would have already created a named pipe in that location. 
+          - mountPath: /etc/log
+            name: pipe
+          - mountPath: /etc/gc
+            name: gc
+          - mountPath: /etc/config
+            name: config-volume
+        - name: hello-world-spring
+          image: docker.io/r74anand/helloearth
+          volumeMounts: # mount the volumes where the app will write the logs to. 
+          - mountPath: /src/greeting
+            name: pipe
+          - mountPath: /etc/gc
+            name: gc
+          env:
+          - name: count_service
+            value: "hitcount:8081"
+          ports:
+          - name: http
+            containerPort: 8080
+      volumes: # create 2 volumes using K8s emptyDir. These will be mounted on the main and the side car container. 
+      - name: pipe
+        emptyDir: {}
+      - name: gc
+        emptyDir: {}
+      - name: config-volume
+        configMap:
+          name: logfile-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hello
+  labels:
+    svc: hello
+spec:
+  ports:
+  - port: 8080
+    name: http
+  selector:
+    app: hello
